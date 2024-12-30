@@ -22,7 +22,7 @@ from pyomo.core.expr.numvalue import is_fixed
 from pyomo.core.expr.numvalue import value
 from pyomo.core.staleflag import StaleFlagManager
 from pyomo.repn import generate_standard_repn
-from pyomo.solvers.plugins.solvers.direct_solver import DirectSolver
+from pyomo.solvers.plugins.solvers.direct_solver import DirectSolver, ScenarioChanges
 from pyomo.solvers.plugins.solvers.direct_or_persistent_solver import (
     DirectOrPersistentSolver,
 )
@@ -75,9 +75,13 @@ gurobipy, gurobipy_available = attempt_import(
 
 
 def _set_options(model_or_env, options):
+    breakpoint()
     # Set a parameters from the dictionary 'options' on the given gurobipy
     # model or environment.
     for key, option in options.items():
+        if key == "NumScenarios":
+            continue
+
         # When options come from the pyomo command, all
         # values are string types, so we try to cast
         # them to a numeric value in the event that
@@ -410,6 +414,67 @@ class GurobiDirect(DirectSolver):
             if model.name is not None
             else gurobipy.Model(env=self._env)
         )
+
+    def _parse_multiple_scenarios(self):
+        """Apply the changes in other scenarios that are based on a
+        baseline scenario.
+        """
+
+        # Step 1. Iterate over variables, constraints and objective to
+        # determine the highest scenario id, or equivalently the number
+        # of scenarios in this model.
+
+        breakpoint()
+        changes = []
+        for var in self._referenced_variables:
+            for scen_id in var.scen_lb:
+                changes.append((scen_id, ScenarioChanges.VAR_LB, var))
+
+            for scen_id in var.scen_ub:
+                changes.extend((scen_id, ScenarioChanges.VAR_UB, var))
+
+        # Now RHS constraints...
+        # NOTE: INITIALLY ONLY FOR SCALARCONSTRAINTS (not range constraints)
+
+        # Now objective function...
+
+        # Consolidate the changes into a dictionary
+        chgs_in_scen = {}
+        for el in changes:
+            if el[0] not in chgs_in_scen:
+                chgs_in_scen[el[0]] = []
+
+            chgs_in_scen[el[0]].append((el[1], el[2]))
+
+        # Step 2. Assert that the highest scenario ID is less or equal than
+        # the existing value in the options dictionary. Because if doesn't,
+        # then raise en error; otherwise, print a warn if the values mismatch.
+
+        breakpoint()
+        max_scen_found = max(chgs_in_scen.keys())
+        if max_scen_found > self.options["NumScenarios"] - 1:
+            raise
+        elif max_scen_found != self.options["NumScenarios"] - 1:
+            print("warning")
+
+        self._solver_model.NumScenarios = self.options["NumScenarios"]
+
+        # Step 3. Apply the changes in each scenario
+
+        breakpoint()
+        for scen_id, changes in chgs_in_scen.items():
+            self._solver_model.Params.ScenarioNumber = scen_id
+            for type_, pyomo_obj in changes:
+                if type_ is ScenarioChanges.VAR_LB:
+                    # Changes in variables
+                    gurobipy_var = self._pyomo_var_to_solver_var_map[var]
+                    gurobipy_var.ScenNLB = pyomo_obj.scen_lb[scen_id]
+                elif type_ is False:
+                    # Changes in constraints
+                    raise
+                else:
+                    # Changes in objective function
+                    raise
 
     def close(self):
         """Frees local Gurobi resources used by this solver instance.

@@ -11,6 +11,8 @@
 
 import time
 import logging
+import abc
+from enum import Enum, auto
 
 from pyomo.solvers.plugins.solvers.direct_or_persistent_solver import (
     DirectOrPersistentSolver,
@@ -25,11 +27,24 @@ from pyomo.common.collections import Bunch
 logger = logging.getLogger('pyomo.solvers')
 
 
+class ScenarioChanges(Enum):
+    VAR_LB = auto()
+    VAR_UB = auto()
+    CONSTR_RHS = auto()
+    OBJ_COEF = auto()
+
+
 class DirectSolver(DirectOrPersistentSolver):
     """
     Subclasses need to:
     1.) Initialize self._solver_model during _presolve before calling DirectSolver._presolve
     """
+
+    @abc.abstractmethod
+    def _parse_multiple_scenarios(self):
+        raise NotImplementedError(
+            f"{type(self)} does not support the multiple scenarios!"
+        )
 
     def _presolve(self, *args, **kwds):
         """
@@ -77,6 +92,8 @@ class DirectSolver(DirectOrPersistentSolver):
         # If the inputs are models, then validate that they have been
         # constructed! Collect suffix names to try and import from solution.
         #
+
+        print("run forest run")
         _model = None
         for arg in args:
             if isinstance(arg, (BlockData, IBlock)):
@@ -138,6 +155,10 @@ class DirectSolver(DirectOrPersistentSolver):
 
             if not _model is None:
                 self._initialize_callbacks(_model)
+
+            scenarios_number = self.options.get("NumScenarios", 1)
+            if scenarios_number > 1:
+                self._parse_multiple_scenarios()
 
             _status = self._apply_solver()
             if hasattr(self, '_transformation_data'):

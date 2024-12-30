@@ -92,7 +92,16 @@ _VARDATA_API = (
 class VarData(ComponentData, NumericValue):
     """This class defines the data for a single variable."""
 
-    __slots__ = ('_value', '_lb', '_ub', '_domain', '_fixed', '_stale')
+    __slots__ = (
+        "_value",
+        "_lb",
+        "_ub",
+        "_domain",
+        "_fixed",
+        "_stale",
+        "_scen_lb",
+        "_scen_ub",
+    )
     __autoslot_mappers__ = {'_stale': StaleFlagManager.stale_mapper}
 
     def __init__(self, component=None):
@@ -117,6 +126,8 @@ class VarData(ComponentData, NumericValue):
         self._fixed = False
         self._stale = 0  # True
 
+        self._scen_lb = {}
+
     @classmethod
     def copy(cls, src):
         self = cls.__new__(cls)
@@ -128,6 +139,8 @@ class VarData(ComponentData, NumericValue):
         self._fixed = src._fixed
         self._stale = src._stale
         self._index = src._index
+
+        self._scen_lb = src._scen_lb
         return self
 
     def set_value(self, val, skip_validation=False):
@@ -328,6 +341,10 @@ class VarData(ComponentData, NumericValue):
     @lb.setter
     def lb(self, val):
         self.lower = val
+
+    @property
+    def scen_lb(self):
+        return self._scen_lb
 
     @property
     def ub(self):
