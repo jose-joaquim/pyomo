@@ -127,6 +127,7 @@ class VarData(ComponentData, NumericValue):
         self._stale = 0  # True
 
         self._scen_lb = {}
+        self._scen_ub = {}
 
     @classmethod
     def copy(cls, src):
@@ -140,7 +141,11 @@ class VarData(ComponentData, NumericValue):
         self._stale = src._stale
         self._index = src._index
 
-        self._scen_lb = src._scen_lb
+        # FIXME: I want to keep the original design of this method,
+        # but use src._{scen_lb,scen_ub} propagates the same dictionary
+        # over different variables, which yields bugs. Think another way later.
+        self._scen_lb = {}
+        self._scen_ub = {}
         return self
 
     def set_value(self, val, skip_validation=False):
@@ -345,6 +350,10 @@ class VarData(ComponentData, NumericValue):
     @property
     def scen_lb(self):
         return self._scen_lb
+
+    @property
+    def scen_ub(self):
+        return self._scen_ub
 
     @property
     def ub(self):

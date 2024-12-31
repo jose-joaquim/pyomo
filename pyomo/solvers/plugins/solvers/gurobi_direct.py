@@ -75,7 +75,6 @@ gurobipy, gurobipy_available = attempt_import(
 
 
 def _set_options(model_or_env, options):
-    breakpoint()
     # Set a parameters from the dictionary 'options' on the given gurobipy
     # model or environment.
     for key, option in options.items():
@@ -424,14 +423,27 @@ class GurobiDirect(DirectSolver):
         # determine the highest scenario id, or equivalently the number
         # of scenarios in this model.
 
-        breakpoint()
         changes = []
         for var in self._referenced_variables:
             for scen_id in var.scen_lb:
-                changes.append((scen_id, ScenarioChanges.VAR_LB, var))
+                breakpoint()
+                changes.append(
+                    (
+                        scen_id,
+                        ScenarioChanges.VAR_LB,
+                        var,
+                    )
+                )
 
             for scen_id in var.scen_ub:
-                changes.extend((scen_id, ScenarioChanges.VAR_UB, var))
+                breakpoint()
+                changes.append(
+                    (
+                        scen_id,
+                        ScenarioChanges.VAR_UB,
+                        var,
+                    )
+                )
 
         # Now RHS constraints...
         # NOTE: INITIALLY ONLY FOR SCALARCONSTRAINTS (not range constraints)
@@ -460,15 +472,20 @@ class GurobiDirect(DirectSolver):
         self._solver_model.NumScenarios = self.options["NumScenarios"]
 
         # Step 3. Apply the changes in each scenario
-
-        breakpoint()
+        # FIXME:  self._pyomo_var_to_solver_var_map retrieving WRONG variable
         for scen_id, changes in chgs_in_scen.items():
             self._solver_model.Params.ScenarioNumber = scen_id
             for type_, pyomo_obj in changes:
                 if type_ is ScenarioChanges.VAR_LB:
-                    # Changes in variables
+                    # Changes in variable LB
+                    breakpoint()
                     gurobipy_var = self._pyomo_var_to_solver_var_map[var]
                     gurobipy_var.ScenNLB = pyomo_obj.scen_lb[scen_id]
+                elif type_ is ScenarioChanges.VAR_UB:
+                    # Changes in variable UB
+                    breakpoint()
+                    gurobipy_var = self._pyomo_var_to_solver_var_map[var]
+                    gurobipy_var.ScenNUB = pyomo_obj.scen_ub[scen_id]
                 elif type_ is False:
                     # Changes in constraints
                     raise
