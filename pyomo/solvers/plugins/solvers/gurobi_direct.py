@@ -423,25 +423,27 @@ class GurobiDirect(DirectSolver):
         # determine the highest scenario id, or equivalently the number
         # of scenarios in this model.
 
-        changes = []
+        breakpoint()
+        chgs_in_scen = {}
         for var in self._referenced_variables:
+            gurobipy_var = self._pyomo_var_to_solver_var_map[var]
             for scen_id in var.scen_lb:
-                breakpoint()
-                changes.append(
+                scen_changes = chgs_in_scen.setdefault(scen_id, [])
+                scen_changes.append(
                     (
-                        scen_id,
                         ScenarioChanges.VAR_LB,
-                        var,
+                        gurobipy_var,
+                        var.scen_lb[scen_id],
                     )
                 )
 
             for scen_id in var.scen_ub:
-                breakpoint()
-                changes.append(
+                scen_changes = chgs_in_scen.setdefault(scen_id, [])
+                scen_changes.append(
                     (
-                        scen_id,
                         ScenarioChanges.VAR_UB,
-                        var,
+                        gurobipy_var,
+                        var.scen_ub[scen_id],
                     )
                 )
 
@@ -450,19 +452,38 @@ class GurobiDirect(DirectSolver):
 
         # Now objective function...
 
-        # Consolidate the changes into a dictionary
-        chgs_in_scen = {}
-        for el in changes:
-            if el[0] not in chgs_in_scen:
-                chgs_in_scen[el[0]] = []
+        breakpoint()
+        # block IS THE MODEL
+        for sub_block in self._pyomo_model.block_data_objects(
+            descend_into=True, active=True
+        ):
+            for obj in sub_block.component_data_objects(
+                ctype=Objective,
+                descend_into=False,
+                active=True,
+            ):
+                # TODO: seach on how to verify if 'scenario' exists in this object
+                if obj.scenario == 0:
+                    continue
 
-            chgs_in_scen[el[0]].append((el[1], el[2]))
+                # TODO: RAISE AN ERROR IF SCENARIO OBJECTIVE IS IN
+                # THE OPPOSITE DIRECTION OF BASELINE OBJECTIVE.
+                scen_changes = chgs_in_scen.setdefault(obj.scenario, [])
+
+                for coef, var in zip(obj.expr.linear_coefs, obj.expr.linear_vars):
+                    scen_changes.append(
+                        (
+                            obj.scenario,
+                            ScenarioChanges.OBJ_COEF,
+                            var,
+                            coef,
+                        )
+                    )
 
         # Step 2. Assert that the highest scenario ID is less or equal than
         # the existing value in the options dictionary. Because if doesn't,
         # then raise en error; otherwise, print a warn if the values mismatch.
 
-        breakpoint()
         max_scen_found = max(chgs_in_scen.keys())
         if max_scen_found > self.options["NumScenarios"] - 1:
             raise
@@ -472,25 +493,22 @@ class GurobiDirect(DirectSolver):
         self._solver_model.NumScenarios = self.options["NumScenarios"]
 
         # Step 3. Apply the changes in each scenario
-        # FIXME:  self._pyomo_var_to_solver_var_map retrieving WRONG variable
         for scen_id, changes in chgs_in_scen.items():
+            # Change the context...
             self._solver_model.Params.ScenarioNumber = scen_id
-            for type_, pyomo_obj in changes:
+            for type_, gurobipy_obj, val in changes:
                 if type_ is ScenarioChanges.VAR_LB:
                     # Changes in variable LB
-                    breakpoint()
-                    gurobipy_var = self._pyomo_var_to_solver_var_map[var]
-                    gurobipy_var.ScenNLB = pyomo_obj.scen_lb[scen_id]
+                    gurobipy_obj.ScenNLB = val
                 elif type_ is ScenarioChanges.VAR_UB:
                     # Changes in variable UB
-                    breakpoint()
-                    gurobipy_var = self._pyomo_var_to_solver_var_map[var]
-                    gurobipy_var.ScenNUB = pyomo_obj.scen_ub[scen_id]
-                elif type_ is False:
-                    # Changes in constraints
+                    gurobipy_obj.ScenNUB = val
+                elif type_ is ScenarioChanges.OBJ_COEF:
+                    # Changes in objective function
+                    gurobipy_obj.ScenNObj = val
                     raise
                 else:
-                    # Changes in objective function
+                    # Changes in constraints
                     raise
 
     def close(self):

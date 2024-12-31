@@ -412,6 +412,12 @@ class ScalarObjective(ObjectiveData, Objective):
         ObjectiveData.__init__(self, expr=None, component=self)
         Objective.__init__(self, *args, **kwd)
         self._index = UnindexedComponent_index
+        breakpoint()
+        self._scenario = self._pop_from_kwargs("Objective", kwd, ("scenario"), 0)
+
+    @property
+    def scenario(self) -> int:
+        return self._scenario
 
     #
     # Override abstract interface methods to first check for
