@@ -148,7 +148,24 @@ class ConstraintData(ActiveComponentData):
 
     """
 
-    __slots__ = ('_expr',)
+    __slots__ = (
+        "_expr",
+        "_scen_rhs_val",
+    )
+
+    @property
+    def scen_rhs_val(self):
+        return self._scen_rhs_val
+
+    def set_constraint_rhs_in_scen(self, scen_id, rhs):
+        if scen_id == 0:
+            raise ValueError(
+                "You can't set the rhs of a given constraint"
+                "for the baseline scenario."
+            )
+
+        self._scen_rhs_val[scen_id].setdefault(scen_id, [])
+        self._scen_rhs_val[scen_id].append((rhs,))
 
     # Set to true when a constraint class stores its expression
     # in linear canonical form
@@ -163,6 +180,7 @@ class ConstraintData(ActiveComponentData):
         #   - ComponentData
         self._component = weakref_ref(component) if (component is not None) else None
         self._active = True
+        self._scen_rhs_val = {}
 
         self._expr = None
         if expr is not None:

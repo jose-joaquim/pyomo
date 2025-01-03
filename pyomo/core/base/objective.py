@@ -412,12 +412,29 @@ class ScalarObjective(ObjectiveData, Objective):
         ObjectiveData.__init__(self, expr=None, component=self)
         Objective.__init__(self, *args, **kwd)
         self._index = UnindexedComponent_index
-        breakpoint()
-        self._scenario = self._pop_from_kwargs("Objective", kwd, ("scenario"), 0)
+        # breakpoint()
+        # self._scenario = self._pop_from_kwargs("Objective", kwd, ("scenario"), 0)
+        self._scen_var_of_coeff = {}
+
+    # @property
+    # def scenario(self) -> int:
+    #     return self._scenario
 
     @property
-    def scenario(self) -> int:
-        return self._scenario
+    def scen_var_coeffs(self):
+        return self._scen_var_of_coeff
+
+    def set_var_coeff_val_in_scen(self, scen_id, var, val):
+        if scen_id == 0:
+            raise ValueError(
+                "You can't set the value of a given variable"
+                "for the baseline scenario." % (self.name)
+            )
+
+        self._scen_var_of_coeff[scen_id] = (
+            var,
+            val,
+        )
 
     #
     # Override abstract interface methods to first check for

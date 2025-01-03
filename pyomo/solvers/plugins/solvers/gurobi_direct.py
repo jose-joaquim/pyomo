@@ -423,7 +423,7 @@ class GurobiDirect(DirectSolver):
         # determine the highest scenario id, or equivalently the number
         # of scenarios in this model.
 
-        breakpoint()
+        # First, variables...
         chgs_in_scen = {}
         for var in self._referenced_variables:
             gurobipy_var = self._pyomo_var_to_solver_var_map[var]
@@ -448,37 +448,29 @@ class GurobiDirect(DirectSolver):
                 )
 
         # Now RHS constraints...
-        # NOTE: INITIALLY ONLY FOR SCALARCONSTRAINTS (not range constraints)
+        for pyomo_c, gurobipy_c in self._pyomo_con_to_solver_con_map.items():
+            for scen_id, rhs_val in pyomo_c.scen_rhs_val.items():
+                scen_changes = chgs_in_scen.setdefault(scen_id, [])
+                scen_changes.append(
+                    (
+                        ScenarioChanges.CONSTR_RHS,
+                        gurobipy_c,
+                        rhs_val,
+                    )
+                )
 
         # Now objective function...
-
-        breakpoint()
-        # block IS THE MODEL
-        for sub_block in self._pyomo_model.block_data_objects(
-            descend_into=True, active=True
-        ):
-            for obj in sub_block.component_data_objects(
-                ctype=Objective,
-                descend_into=False,
-                active=True,
-            ):
-                # TODO: seach on how to verify if 'scenario' exists in this object
-                if obj.scenario == 0:
-                    continue
-
-                # TODO: RAISE AN ERROR IF SCENARIO OBJECTIVE IS IN
-                # THE OPPOSITE DIRECTION OF BASELINE OBJECTIVE.
-                scen_changes = chgs_in_scen.setdefault(obj.scenario, [])
-
-                for coef, var in zip(obj.expr.linear_coefs, obj.expr.linear_vars):
-                    scen_changes.append(
-                        (
-                            obj.scenario,
-                            ScenarioChanges.OBJ_COEF,
-                            var,
-                            coef,
-                        )
-                    )
+        for scen_id, el in self._objective.scen_var_coeffs.items():
+            var, value = el[0], el[1]
+            gurobipy_var = self._pyomo_var_to_solver_var_map[var]
+            scen_changes = chgs_in_scen.setdefault(scen_id, [])
+            scen_changes.append(
+                (
+                    ScenarioChanges.OBJ_COEF,
+                    gurobipy_var,
+                    value,
+                )
+            )
 
         # Step 2. Assert that the highest scenario ID is less or equal than
         # the existing value in the options dictionary. Because if doesn't,
@@ -486,9 +478,12 @@ class GurobiDirect(DirectSolver):
 
         max_scen_found = max(chgs_in_scen.keys())
         if max_scen_found > self.options["NumScenarios"] - 1:
-            raise
+            raise RuntimeError(
+                "The highest scenario change number "
+                "is greater than the actual number of scenarios."
+            )
         elif max_scen_found != self.options["NumScenarios"] - 1:
-            print("warning")
+            logger.warning("There are scenarios with no changes.")
 
         self._solver_model.NumScenarios = self.options["NumScenarios"]
 
@@ -506,10 +501,11 @@ class GurobiDirect(DirectSolver):
                 elif type_ is ScenarioChanges.OBJ_COEF:
                     # Changes in objective function
                     gurobipy_obj.ScenNObj = val
-                    raise
-                else:
+                elif type_ is ScenarioChanges.CONSTR_RHS:
                     # Changes in constraints
-                    raise
+                    gurobipy_obj.ScenNRhs = val
+                else:
+                    raise ValueError("Unrecognized enum value")
 
     def close(self):
         """Frees local Gurobi resources used by this solver instance.
